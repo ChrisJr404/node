@@ -22,6 +22,20 @@
 #include "src/base/macros.h"
 #include "src/base/overflowing-math.h"
 
+// TODO(thakis): Remove diagnostic pragmas once these are merged and upstream
+// builds with -Wshadow:
+// * https://github.com/llvm/llvm-project/pull/196337
+// * https://github.com/llvm/llvm-project/pull/196342
+// * https://github.com/llvm/llvm-project/pull/196346
+#pragma GCC diagnostic push
+#if defined(__has_warning)
+#if __has_warning("-Wshadow")
+#pragma GCC diagnostic ignored "-Wshadow"
+#endif
+#endif
+#include "third_party/llvm-libc/src/shared/math.h"
+#pragma GCC diagnostic pop
+
 namespace v8 {
 namespace base {
 namespace ieee754 {
@@ -876,10 +890,11 @@ double acos(double x) {
     uint32_t lx;
     GET_LOW_WORD(lx, x);
     if (((ix - 0x3FF00000) | lx) == 0) { /* |x|==1 */
-      if (hx > 0)
+      if (hx > 0) {
         return 0.0; /* acos(1) = 0  */
-      else
+      } else {
         return pi + 2.0 * pio2_lo; /* acos(-1)= pi */
+      }
     }
     return std::numeric_limits<double>::signaling_NaN();  // acos(|x|>1) is NaN
   }
@@ -1041,10 +1056,11 @@ double asin(double x) {
     q = pio4_hi - 2.0 * w;
     t = pio4_hi - (p - q);
   }
-  if (hx > 0)
+  if (hx > 0) {
     return t;
-  else
+  } else {
     return -t;
+  }
 }
 /* asinh(x)
  * Method :
@@ -1144,12 +1160,14 @@ double atan(double x) {
   if (ix >= 0x44100000) { /* if |x| >= 2^66 */
     uint32_t low;
     GET_LOW_WORD(low, x);
-    if (ix > 0x7FF00000 || (ix == 0x7FF00000 && (low != 0)))
+    if (ix > 0x7FF00000 || (ix == 0x7FF00000 && (low != 0))) {
       return x + x; /* NaN */
-    if (hx > 0)
+    }
+    if (hx > 0) {
       return atanhi[3] + *const_cast<volatile double*>(&atanlo[3]);
-    else
+    } else {
       return -atanhi[3] - *const_cast<volatile double*>(&atanlo[3]);
+    }
   }
   if (ix < 0x3FDC0000) {            /* |x| < 0.4375 */
     if (ix < 0x3E400000) {          /* |x| < 2^-27 */
@@ -1472,10 +1490,11 @@ double exp(double x) {
     if (hx >= 0x7FF00000) {
       uint32_t lx;
       GET_LOW_WORD(lx, x);
-      if (((hx & 0xFFFFF) | lx) != 0)
+      if (((hx & 0xFFFFF) | lx) != 0) {
         return x + x; /* NaN */
-      else
+      } else {
         return (xsb == 0) ? x : 0.0; /* exp(+-inf)={inf,0} */
+      }
     }
     if (x > o_threshold) return huge * huge;         /* overflow */
     if (x < u_threshold) return twom1000 * twom1000; /* underflow */
@@ -1571,10 +1590,11 @@ double atanh(double x) {
   } else {
     t = 0.5 * log1p((x + x) / (one - x));
   }
-  if (hx >= 0)
+  if (hx >= 0) {
     return t;
-  else
+  } else {
     return -t;
+  }
 }
 
 /* log(x)
@@ -1696,15 +1716,17 @@ double log(double x) {
   R = t2 + t1;
   if (i > 0) {
     hfsq = 0.5 * f * f;
-    if (k == 0)
+    if (k == 0) {
       return f - (hfsq - s * (hfsq + R));
-    else
+    } else {
       return dk * ln2_hi - ((hfsq - (s * (hfsq + R) + dk * ln2_lo)) - f);
+    }
   } else {
-    if (k == 0)
+    if (k == 0) {
       return f - s * (f - R);
-    else
+    } else {
       return dk * ln2_hi - ((s * (f - R) - dk * ln2_lo) - f);
+    }
   }
 }
 
@@ -1796,17 +1818,19 @@ double log1p(double x) {
   k = 1;
   if (hx < 0x3FDA827A) {    /* 1+x < sqrt(2)+ */
     if (ax >= 0x3FF00000) { /* x <= -1.0 */
-      if (x == -1.0)
+      if (x == -1.0) {
         return -std::numeric_limits<double>::infinity(); /* log1p(-1)=+inf */
-      else
+      } else {
         return std::numeric_limits<double>::signaling_NaN();  // log1p(x<-1)=NaN
+      }
     }
     if (ax < 0x3E200000) {    /* |x| < 2**-29 */
       if (two54 + x > zero    /* raise inexact */
-          && ax < 0x3C900000) /* |x| < 2**-54 */
+          && ax < 0x3C900000) { /* |x| < 2**-54 */
         return x;
-      else
+      } else {
         return x - x * x * 0.5;
+      }
     }
     if (hx > 0 || hx <= static_cast<int32_t>(0xBFD2BEC4)) {
       k = 0;
@@ -1856,19 +1880,21 @@ double log1p(double x) {
       }
     }
     R = hfsq * (1.0 - 0.66666666666666666 * f);
-    if (k == 0)
+    if (k == 0) {
       return f - R;
-    else
+    } else {
       return k * ln2_hi - ((R - (k * ln2_lo + c)) - f);
+    }
   }
   s = f / (2.0 + f);
   z = s * s;
   R = z * (Lp1 +
            z * (Lp2 + z * (Lp3 + z * (Lp4 + z * (Lp5 + z * (Lp6 + z * Lp7))))));
-  if (k == 0)
+  if (k == 0) {
     return f - (hfsq - s * (hfsq + R));
-  else
+  } else {
     return k * ln2_hi - ((hfsq - (s * (hfsq + R) + (k * ln2_lo + c))) - f);
+  }
 }
 
 /*
@@ -2234,16 +2260,18 @@ double expm1(double x) {
       if (hx >= 0x7FF00000) {
         uint32_t low;
         GET_LOW_WORD(low, x);
-        if (((hx & 0xFFFFF) | low) != 0)
+        if (((hx & 0xFFFFF) | low) != 0) {
           return x + x; /* NaN */
-        else
+        } else {
           return (xsb == 0) ? x : -1.0; /* exp(+-inf)={inf,-1} */
+        }
       }
       if (x > o_threshold) return huge * huge; /* overflow */
     }
     if (xsb != 0) {        /* x < -56*ln2, return -1.0 with inexact */
-      if (x + tiny < 0.0)  /* raise inexact */
+      if (x + tiny < 0.0) { /* raise inexact */
         return tiny - one; /* return -1 */
+      }
     }
   }
 
@@ -2291,20 +2319,22 @@ double expm1(double x) {
     e -= hxs;
     if (k == -1) return 0.5 * (x - e) - 0.5;
     if (k == 1) {
-      if (x < -0.25)
+      if (x < -0.25) {
         return -2.0 * (e - (x + 0.5));
-      else
+      } else {
         return one + 2.0 * (x - e);
+      }
     }
     if (k <= -2 || k > 56) { /* suffice to return exp(x)-1 */
       y = one - (e - x);
       // TODO(mvstanton): is this replacement for the hex float
       // sufficient?
       // if (k == 1024) y = y*2.0*0x1p1023;
-      if (k == 1024)
+      if (k == 1024) {
         y = y * 2.0 * 8.98846567431158e+307;
-      else
+      } else {
         y = y * twopk;
+      }
       return y - one;
     }
     t = one;
@@ -2322,89 +2352,7 @@ double expm1(double x) {
   return y;
 }
 
-double cbrt(double x) {
-  static const uint32_t
-      B1 = 715094163, /* B1 = (1023-1023/3-0.03306235651)*2**20 */
-      B2 = 696219795; /* B2 = (1023-1023/3-54/3-0.03306235651)*2**20 */
-
-  /* |1/cbrt(x) - p(x)| < 2**-23.5 (~[-7.93e-8, 7.929e-8]). */
-  static const double P0 = 1.87595182427177009643, /* 0x3FFE03E6, 0x0F61E692 */
-      P1 = -1.88497979543377169875,                /* 0xBFFE28E0, 0x92F02420 */
-      P2 = 1.621429720105354466140,                /* 0x3FF9F160, 0x4A49D6C2 */
-      P3 = -0.758397934778766047437,               /* 0xBFE844CB, 0xBEE751D9 */
-      P4 = 0.145996192886612446982;                /* 0x3FC2B000, 0xD4E4EDD7 */
-
-  int32_t hx;
-  double r, s, t = 0.0, w;
-  uint32_t sign;
-  uint32_t high, low;
-
-  EXTRACT_WORDS(hx, low, x);
-  sign = hx & 0x80000000; /* sign= sign(x) */
-  hx ^= sign;
-  if (hx >= 0x7FF00000) return (x + x); /* cbrt(NaN,INF) is itself */
-
-  /*
-   * Rough cbrt to 5 bits:
-   *    cbrt(2**e*(1+m) ~= 2**(e/3)*(1+(e%3+m)/3)
-   * where e is integral and >= 0, m is real and in [0, 1), and "/" and
-   * "%" are integer division and modulus with rounding towards minus
-   * infinity.  The RHS is always >= the LHS and has a maximum relative
-   * error of about 1 in 16.  Adding a bias of -0.03306235651 to the
-   * (e%3+m)/3 term reduces the error to about 1 in 32. With the IEEE
-   * floating point representation, for finite positive normal values,
-   * ordinary integer division of the value in bits magically gives
-   * almost exactly the RHS of the above provided we first subtract the
-   * exponent bias (1023 for doubles) and later add it back.  We do the
-   * subtraction virtually to keep e >= 0 so that ordinary integer
-   * division rounds towards minus infinity; this is also efficient.
-   */
-  if (hx < 0x00100000) {             /* zero or subnormal? */
-    if ((hx | low) == 0) return (x); /* cbrt(0) is itself */
-    SET_HIGH_WORD(t, 0x43500000);    /* set t= 2**54 */
-    t *= x;
-    GET_HIGH_WORD(high, t);
-    INSERT_WORDS(t, sign | ((high & 0x7FFFFFFF) / 3 + B2), 0);
-  } else {
-    INSERT_WORDS(t, sign | (hx / 3 + B1), 0);
-  }
-
-  /*
-   * New cbrt to 23 bits:
-   *    cbrt(x) = t*cbrt(x/t**3) ~= t*P(t**3/x)
-   * where P(r) is a polynomial of degree 4 that approximates 1/cbrt(r)
-   * to within 2**-23.5 when |r - 1| < 1/10.  The rough approximation
-   * has produced t such than |t/cbrt(x) - 1| ~< 1/32, and cubing this
-   * gives us bounds for r = t**3/x.
-   *
-   * Try to optimize for parallel evaluation as in k_tanf.c.
-   */
-  r = (t * t) * (t / x);
-  t = t * ((P0 + r * (P1 + r * P2)) + ((r * r) * r) * (P3 + r * P4));
-
-  /*
-   * Round t away from zero to 23 bits (sloppily except for ensuring that
-   * the result is larger in magnitude than cbrt(x) but not much more than
-   * 2 23-bit ulps larger).  With rounding towards zero, the error bound
-   * would be ~5/6 instead of ~4/6.  With a maximum error of 2 23-bit ulps
-   * in the rounded t, the infinite-precision error in the Newton
-   * approximation barely affects third digit in the final error
-   * 0.667; the error in the rounded t can be up to about 3 23-bit ulps
-   * before the final error is larger than 0.667 ulps.
-   */
-  uint64_t bits = base::bit_cast<uint64_t>(t);
-  bits = (bits + 0x80000000) & 0xFFFFFFFFC0000000ULL;
-  t = base::bit_cast<double>(bits);
-
-  /* one step Newton iteration to 53 bits with error < 0.667 ulps */
-  s = t * t;             /* t*t is exact */
-  r = x / s;             /* error <= 0.5 ulps; |r| < |t| */
-  w = t + t;             /* t+t is exact */
-  r = (r - t) / (w + r); /* r-t is exact; w+r ~= 3*t */
-  t = t + t * r;         /* error <= 0.5 + 0.5/3 + epsilon */
-
-  return (t);
-}
+double cbrt(double x) { return LIBC_NAMESPACE::shared::cbrt(x); }
 
 /* sin(x)
  * Return sine function of x.
@@ -2950,65 +2898,6 @@ double sinh(double x) {
   // |x| > overflowthreshold or is NaN.
   // Return Infinity of the appropriate sign or NaN.
   return x * shuge;
-}
-
-/* Tanh(x)
- * Return the Hyperbolic Tangent of x
- *
- * Method :
- *                                 x    -x
- *                                e  - e
- *  0. tanh(x) is defined to be -----------
- *                                 x    -x
- *                                e  + e
- *  1. reduce x to non-negative by tanh(-x) = -tanh(x).
- *  2.  0      <= x <  2**-28 : tanh(x) := x with inexact if x != 0
- *                                          -t
- *      2**-28 <= x <  1      : tanh(x) := -----; t = expm1(-2x)
- *                                         t + 2
- *                                               2
- *      1      <= x <  22     : tanh(x) := 1 - -----; t = expm1(2x)
- *                                             t + 2
- *      22     <= x <= INF    : tanh(x) := 1.
- *
- * Special cases:
- *      tanh(NaN) is NaN;
- *      only tanh(0)=0 is exact for finite argument.
- */
-double tanh(double x) {
-  static const volatile double tiny = 1.0e-300;
-  static const double one = 1.0, two = 2.0, huge = 1.0e300;
-  double t, z;
-  int32_t jx, ix;
-
-  GET_HIGH_WORD(jx, x);
-  ix = jx & 0x7FFFFFFF;
-
-  /* x is INF or NaN */
-  if (ix >= 0x7FF00000) {
-    if (jx >= 0)
-      return one / x + one; /* tanh(+-inf)=+-1 */
-    else
-      return one / x - one; /* tanh(NaN) = NaN */
-  }
-
-  /* |x| < 22 */
-  if (ix < 0x40360000) {            /* |x|<22 */
-    if (ix < 0x3E300000) {          /* |x|<2**-28 */
-      if (huge + x > one) return x; /* tanh(tiny) = tiny with inexact */
-    }
-    if (ix >= 0x3FF00000) { /* |x|>=1  */
-      t = expm1(two * fabs(x));
-      z = one - two / (t + two);
-    } else {
-      t = expm1(-two * fabs(x));
-      z = -t / (t + two);
-    }
-    /* |x| >= 22, return +-1 */
-  } else {
-    z = one - tiny; /* raise inexact flag */
-  }
-  return (jx >= 0) ? z : -z;
 }
 
 #undef EXTRACT_WORDS

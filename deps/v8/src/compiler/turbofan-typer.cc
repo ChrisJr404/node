@@ -126,7 +126,7 @@ class Typer::Visitor : public Reducer {
       SIMPLIFIED_CHECKED_OP_LIST(DECLARE_IMPOSSIBLE_CASE)
       IF_WASM(SIMPLIFIED_WASM_OP_LIST, DECLARE_IMPOSSIBLE_CASE)
       MACHINE_SIMD128_OP_LIST(DECLARE_IMPOSSIBLE_CASE)
-      IF_WASM(MACHINE_SIMD256_OP_LIST, DECLARE_IMPOSSIBLE_CASE)
+      IF_SIMD256(MACHINE_SIMD256_OP_LIST, DECLARE_IMPOSSIBLE_CASE)
       MACHINE_UNOP_32_LIST(DECLARE_IMPOSSIBLE_CASE)
       DECLARE_IMPOSSIBLE_CASE(Word32Xor)
       DECLARE_IMPOSSIBLE_CASE(Word32Sar)
@@ -254,8 +254,8 @@ class Typer::Visitor : public Reducer {
       DECLARE_IMPOSSIBLE_CASE(Word32PairShl)
       DECLARE_IMPOSSIBLE_CASE(Word32PairShr)
       DECLARE_IMPOSSIBLE_CASE(Word32PairSar)
-      DECLARE_IMPOSSIBLE_CASE(ProtectedLoad)
-      DECLARE_IMPOSSIBLE_CASE(ProtectedStore)
+      DECLARE_IMPOSSIBLE_CASE(TrappingLoad)
+      DECLARE_IMPOSSIBLE_CASE(TrappingStore)
       DECLARE_IMPOSSIBLE_CASE(LoadTrapOnNull)
       DECLARE_IMPOSSIBLE_CASE(StoreTrapOnNull)
       DECLARE_IMPOSSIBLE_CASE(MemoryBarrier)
@@ -869,7 +869,8 @@ Type Typer::Visitor::TypeParameter(Node* node) {
   } else if (index == start.ContextParameterIndex()) {
     return Type::OtherInternal();
   }
-  return Type::NonInternal();
+  // Maglev parameter elision can insert kOptimizedOut holes.
+  return Type::Union(Type::NonInternal(), Type::Hole(), typer_->zone());
 }
 
 Type Typer::Visitor::TypeOsrValue(Node* node) {
@@ -2236,6 +2237,10 @@ Type Typer::Visitor::TypeJSStackCheck(Node* node) { return Type::Any(); }
 
 Type Typer::Visitor::TypeJSDebugger(Node* node) { return Type::Any(); }
 
+Type Typer::Visitor::TypeJSAsyncFunctionAwait(Node* node) {
+  return Type::OtherObject();
+}
+
 Type Typer::Visitor::TypeJSAsyncFunctionEnter(Node* node) {
   return Type::OtherObject();
 }
@@ -2411,6 +2416,13 @@ Type Typer::Visitor::TypeStringToUpperCaseIntl(Node* node) {
   return Type::String();
 }
 
+Type Typer::Visitor::TypeStringLocaleCompareIntl(Node* node) {
+  // ECMA-402 only requires negative/zero/positive; the tighter type
+  // relies on V8's implementation always returning ICU's UCollationResult
+  // enum {-1, 0, 1}. See DCHECKs in builtins-intl.cc.
+  return typer_->cache_->kMinusOneOrZeroOrOne;
+}
+
 Type Typer::Visitor::TypeStringCharCodeAt(Node* node) {
   return typer_->cache_->kUint16;
 }
@@ -2463,6 +2475,8 @@ Type Typer::Visitor::TypeCheckInternalizedString(Node* node) {
 }
 
 Type Typer::Visitor::TypeCheckMaps(Node* node) { UNREACHABLE(); }
+
+Type Typer::Visitor::TypeCheckHomomorphic(Node* node) { UNREACHABLE(); }
 
 Type Typer::Visitor::TypeCompareMaps(Node* node) { return Type::Boolean(); }
 
@@ -2763,6 +2777,8 @@ Type Typer::Visitor::TypeFindOrderedHashMapEntryForInt32Key(Node* node) {
 Type Typer::Visitor::TypeFindOrderedHashSetEntry(Node* node) {
   return Type::Range(-1.0, FixedArray::kMaxLength, zone());
 }
+
+Type Typer::Visitor::TypeWeakCollectionGet(Node* node) { return Type::Any(); }
 
 Type Typer::Visitor::TypeRuntimeAbort(Node* node) { UNREACHABLE(); }
 

@@ -281,9 +281,11 @@ bool WasmBytecodeGenerator::DecodeSimdOp(WasmOpcode opcode,
 
   if ((opcode >= kExprS128LoadMem && opcode <= kExprS128StoreMem) ||
       opcode == kExprS128Load32Zero || opcode == kExprS128Load64Zero) {
-    MemoryAccessImmediate imm(decoder, code->at(pc + *len), 64, false,
+    bool is_rmw = WasmOpcodes::IsAtomicRmwOpcode(opcode);
+    MemoryAccessImmediate imm(decoder, code->at(pc + *len), 64, false, is_rmw,
                               Decoder::kNoValidation);
-    optional->offset = imm.offset;
+    optional->memory_access.offset = imm.offset;
+    optional->memory_access.memory_index = imm.mem_index;
     *len += imm.length;
   } else if (opcode == kExprS128Const) {
     Simd128Immediate imm(decoder, code->at(pc + *len), kNoValidate);
@@ -303,12 +305,13 @@ bool WasmBytecodeGenerator::DecodeSimdOp(WasmOpcode opcode,
     if (imm.lane >= kSimd128Size) {
       return false;
     }
-    optional->simd_lane = imm.lane;
+    optional->simd_lane.set_lane(imm.lane);
     *len += 1;
   } else if ((opcode >= kExprS128Load8Lane) &&
              (opcode <= kExprS128Store64Lane)) {
+    bool is_rmw = WasmOpcodes::IsAtomicRmwOpcode(opcode);
     MemoryAccessImmediate mem_imm(decoder, code->at(pc + *len), 64, false,
-                                  Decoder::kNoValidation);
+                                  is_rmw, Decoder::kNoValidation);
     if (mem_imm.offset >= ((uint64_t)1 << 48)) {
       return false;
     }
@@ -319,8 +322,9 @@ bool WasmBytecodeGenerator::DecodeSimdOp(WasmOpcode opcode,
       return false;
     }
 
-    optional->simd_loadstore_lane.offset = mem_imm.offset;
-    optional->simd_loadstore_lane.lane = lane_imm.lane;
+    optional->simd_loadstore_lane.set_offset(mem_imm.offset);
+    optional->simd_loadstore_lane.set_memory_index(mem_imm.mem_index);
+    optional->simd_loadstore_lane.set_lane(lane_imm.lane);
     *len += lane_imm.length;
   } else if (WasmOpcodes::IsRelaxedSimdOpcode(opcode)) {
     // Relaxed SIMD opcodes:
